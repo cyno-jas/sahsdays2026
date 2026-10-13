@@ -1,14 +1,3 @@
-/**
- * SAHS Days 2026 QR Attendance System
- * Bind this Apps Script project to the new Google Spreadsheet:
- * Extensions > Apps Script.
- *
- * IMPORTANT:
- * - Run setupSheets() once before deploying.
- * - Set the spreadsheet timezone to Asia/Manila.
- * - Deploy as a Web App, executing as the owner.
- */
-
 const CONFIG = {
   EVENT_DATES: ['2026-10-19', '2026-10-20'],
   CUTOFF: '06:45',
