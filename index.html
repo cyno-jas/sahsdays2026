@@ -4,61 +4,69 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SAHS Days 2026 QR Attendance</title>
+  <title>SAHS Days 2026 | QR Attendance</title>
 
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
   <style>
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     body {
       margin: 0;
       padding: 20px;
       font-family: Arial, sans-serif;
-      background: #f4f6f8;
-      color: #202124;
+      background: #f3f5f9;
+      color: #202738;
     }
 
     .container {
-      max-width: 520px;
+      max-width: 650px;
       margin: 0 auto;
-      background: white;
-      padding: 22px;
-      border-radius: 14px;
-      box-shadow: 0 3px 14px rgba(0, 0, 0, 0.08);
     }
 
-    h1 {
-      margin: 0 0 6px;
-      font-size: 24px;
+    .header {
+      background: #172554;
+      color: white;
+      padding: 25px 20px;
+      border-radius: 16px;
       text-align: center;
+      margin-bottom: 18px;
     }
 
-    .subtitle {
-      margin: 0 0 22px;
-      text-align: center;
-      color: #5f6368;
+    .header h1 {
+      margin: 0 0 8px;
+      font-size: 25px;
+    }
+
+    .header p {
+      margin: 0;
       font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .card {
+      background: white;
+      padding: 20px;
+      border-radius: 14px;
+      margin-bottom: 16px;
+      box-shadow: 0 3px 12px rgba(0,0,0,.06);
     }
 
     label {
       display: block;
-      margin: 16px 0 7px;
       font-weight: bold;
-      font-size: 14px;
+      margin: 13px 0 7px;
     }
 
     select, input, button {
       width: 100%;
       padding: 12px;
-      font-size: 16px;
       border-radius: 8px;
+      font-size: 16px;
     }
 
     select, input {
-      border: 1px solid #c9cdd2;
+      border: 1px solid #cbd5e1;
       background: white;
     }
 
@@ -69,265 +77,460 @@
       margin-top: 12px;
     }
 
+    button:disabled {
+      opacity: .55;
+      cursor: not-allowed;
+    }
+
     .primary {
-      background: #174ea6;
+      background: #1d4ed8;
       color: white;
     }
 
     .secondary {
-      background: #e8eaed;
-      color: #202124;
+      background: #e2e8f0;
+      color: #172554;
     }
 
     #reader {
       width: 100%;
-      margin-top: 18px;
+      margin: 15px auto 0;
+    }
+
+    #reader video {
+      border-radius: 10px;
+    }
+
+    #result {
+      display: none;
+      margin-top: 16px;
+      padding: 16px;
+      border-radius: 10px;
+      line-height: 1.6;
+      overflow-wrap: anywhere;
+    }
+
+    #result.success {
+      display: block;
+      background: #dcfce7;
+      border: 1px solid #86efac;
+      color: #166534;
+    }
+
+    #result.warning {
+      display: block;
+      background: #fef3c7;
+      border: 1px solid #fcd34d;
+      color: #92400e;
+    }
+
+    #result.error {
+      display: block;
+      background: #fee2e2;
+      border: 1px solid #fca5a5;
+      color: #991b1b;
     }
 
     #status {
-      padding: 13px;
-      margin-top: 16px;
-      border-radius: 8px;
-      background: #f1f3f4;
-      overflow-wrap: anywhere;
-      line-height: 1.5;
+      color: #475569;
+      font-size: 14px;
+      text-align: center;
+      margin-top: 12px;
     }
 
     .note {
-      font-size: 12px;
-      color: #5f6368;
+      font-size: 13px;
       line-height: 1.5;
-      margin-top: 14px;
+      color: #64748b;
     }
 
-    .hidden {
-      display: none;
+    footer {
+      text-align: center;
+      font-size: 12px;
+      color: #64748b;
+      padding: 10px;
     }
   </style>
 </head>
 
 <body>
-  <main class="container">
-    <h1>SAHS Days 2026</h1>
-    <p class="subtitle">QR Attendance Scanner</p>
+<div class="container">
 
-    <label for="group">Attendance Group</label>
-    <select id="group">
-      <option value="participant">Participant</option>
+  <header class="header">
+    <h1>SAHS DAYS 2026</h1>
+    <p>ORAYA: Where Rhythm Fuels the Rise of Champions</p>
+    <p>QR Attendance Scanner · October 19–20, 2026</p>
+  </header>
+
+  <section class="card">
+    <h2>Attendance Check-in</h2>
+
+    <label for="group">Attendance Category</label>
+    <select id="group" onchange="updateCheckpoints()">
+      <option value="participant">Participants</option>
       <option value="committee">Working Committee</option>
     </select>
 
-    <label for="checkpoint">Checkpoint</label>
+    <label for="checkpoint">Attendance Checkpoint</label>
     <select id="checkpoint"></select>
 
-    <button id="startButton" class="primary" type="button">
-      Start Camera Scanner
-    </button>
+    <p class="note">
+      Confirm the correct category and checkpoint before scanning.
+      Each person should be recorded at the appropriate checkpoint.
+    </p>
+  </section>
 
-    <button id="stopButton" class="secondary" type="button">
-      Stop Camera
-    </button>
+  <section class="card">
+    <h2>Scan QR Code</h2>
+    <p class="note">
+      Allow camera access when prompted. Position the QR code inside
+      the scanning area.
+    </p>
 
     <div id="reader"></div>
+    <div id="status">Starting scanner...</div>
+    <div id="result" role="status" aria-live="polite"></div>
+  </section>
 
-    <label for="manualId">Enter ID Manually</label>
+  <section class="card">
+    <h2>Enter ID Manually</h2>
+    <label for="manualId">ID Number</label>
     <input
-      id="manualId"
       type="text"
-      placeholder="Enter the ID number"
+      id="manualId"
+      placeholder="Enter or scan ID number"
       autocomplete="off"
     >
-
-    <button id="submitButton" class="primary" type="button">
-      Submit ID
+    <button class="primary" id="manualButton" onclick="submitManualId()">
+      Record Attendance
     </button>
+  </section>
 
-    <div id="status" role="status" aria-live="polite">
-      Select the attendance group and checkpoint to begin.
-    </div>
+  <footer>
+    SAHS Days 2026 · Attendance Monitoring
+  </footer>
 
-    <p class="note">
-      Keep this page open while scanning. A message that a request was
-      submitted does not confirm that Google Sheets saved it. Verify the
-      attendance log during testing.
-    </p>
-  </main>
+</div>
 
-  <script>
-    // Replace this with your deployed Apps Script Web App URL.
-    const SCRIPT_URL =
-      "https://script.google.com/macros/s/AKfycby0SxpDH1Azavy_6JyQtupF8vCz_XVFk6MDuEy2dSwuPNjSwyIXqYTHqtzuDjDBOCv7jQ/exec";
+<script>
+  // Your existing Google Apps Script web app URL.
+  const SCRIPT_URL =
+    "https://script.google.com/macros/s/AKfycbwTc4BujrhyucwOp1BZTpfHUwsyr5Th8BRJsT58aAH5BV6BSizkPG8WCQUoWZ7avK9e2w/exec";
 
-    const participantCheckpoints = [
+  const CHECKPOINTS = {
+    participant: [
       "Morning In",
       "Morning Out",
       "Afternoon In",
       "Afternoon Out"
-    ];
-
-    const committeeCheckpoints = [
+    ],
+    committee: [
       "Committee In",
       "Committee Out"
-    ];
+    ]
+  };
 
-    const groupSelect = document.getElementById("group");
+  let scanner = null;
+  let isBusy = false;
+  let callbackCounter = 0;
+  let lastScannedId = "";
+  let lastScannedAt = 0;
+
+  const resultBox = document.getElementById("result");
+  const statusBox = document.getElementById("status");
+  const manualButton = document.getElementById("manualButton");
+
+  function updateCheckpoints() {
+    const group = document.getElementById("group").value;
     const checkpointSelect = document.getElementById("checkpoint");
-    const statusBox = document.getElementById("status");
-    const manualId = document.getElementById("manualId");
 
-    let scanner = null;
-    let scannerRunning = false;
-    let processingScan = false;
+    checkpointSelect.innerHTML = "";
 
-    function setStatus(message) {
-      statusBox.textContent = message;
-    }
-
-    function updateCheckpoints() {
-      const options = groupSelect.value === "committee"
-        ? committeeCheckpoints
-        : participantCheckpoints;
-
-      checkpointSelect.innerHTML = "";
-
-      options.forEach(function (checkpoint) {
-        const option = document.createElement("option");
-        option.value = checkpoint;
-        option.textContent = checkpoint;
-        checkpointSelect.appendChild(option);
-      });
-    }
-
-    groupSelect.addEventListener("change", updateCheckpoints);
-
-    async function startScanner() {
-      if (scannerRunning) return;
-
-      if (typeof Html5Qrcode === "undefined") {
-        setStatus("Scanner library did not load. Check your internet connection.");
-        return;
-      }
-
-      try {
-        scanner = new Html5Qrcode("reader");
-
-        await scanner.start(
-          { facingMode: "environment" },
-          {
-            fps: 10,
-            qrbox: { width: 240, height: 240 }
-          },
-          function (decodedText) {
-            if (processingScan) return;
-
-            processingScan = true;
-            submitScan(decodedText);
-
-            // Prevent the same QR from being processed repeatedly
-            // while it remains in front of the camera.
-            setTimeout(function () {
-              processingScan = false;
-            }, 2500);
-          },
-          function () {
-            // Ignore individual frames without a QR code.
-          }
-        );
-
-        scannerRunning = true;
-        setStatus("Camera is running. Point it at a QR code.");
-      } catch (error) {
-        setStatus(
-          "Could not start the camera. Allow camera access and use the HTTPS GitHub Pages URL."
-        );
-      }
-    }
-
-    async function stopScanner() {
-      if (!scanner || !scannerRunning) return;
-
-      try {
-        await scanner.stop();
-        await scanner.clear();
-        scannerRunning = false;
-        scanner = null;
-        setStatus("Camera stopped.");
-      } catch (error) {
-        setStatus("Could not stop the camera cleanly. Reload the page if needed.");
-      }
-    }
-
-    function submitScan(rawId) {
-      const id = String(rawId || "").trim();
-
-      if (!id) {
-        setStatus("No ID was detected.");
-        return;
-      }
-
-      if (SCRIPT_URL.indexOf("PASTE_YOUR_APPS_SCRIPT") !== -1) {
-        setStatus("Setup incomplete: add your Apps Script Web App URL.");
-        return;
-      }
-
-      const payload = {
-        action: "recordScan",
-        id: id,
-        checkpoint: checkpointSelect.value,
-        group: groupSelect.value
-      };
-
-      setStatus(
-        "Submitting ID " + id + " for " + checkpointSelect.value +
-        ". Checking the Google Sheet is still necessary."
-      );
-
-      // text/plain avoids a JSON preflight request. no-cors means the
-      // browser cannot read the server response, so success cannot be
-      // confirmed from this page.
-      fetch(SCRIPT_URL, {
-        method: "POST",
-        mode: "no-cors",
-        redirect: "follow",
-        headers: {
-          "Content-Type": "text/plain;charset=utf-8"
-        },
-        body: JSON.stringify(payload)
-      })
-      .then(function () {
-        setStatus(
-          "Request submitted for ID " + id +
-          " (" + checkpointSelect.value + "). " +
-          "This is not a confirmed save. Verify the Google Sheets log."
-        );
-        manualId.value = "";
-      })
-      .catch(function () {
-        setStatus(
-          "The request could not be sent. Check your internet connection, " +
-          "Apps Script deployment, and Web App URL."
-        );
-      });
-    }
-
-    document.getElementById("startButton")
-      .addEventListener("click", startScanner);
-
-    document.getElementById("stopButton")
-      .addEventListener("click", stopScanner);
-
-    document.getElementById("submitButton")
-      .addEventListener("click", function () {
-        submitScan(manualId.value);
-      });
-
-    manualId.addEventListener("keydown", function (event) {
-      if (event.key === "Enter") {
-        submitScan(manualId.value);
-      }
+    CHECKPOINTS[group].forEach(function(checkpoint) {
+      const option = document.createElement("option");
+      option.value = checkpoint;
+      option.textContent = checkpoint;
+      checkpointSelect.appendChild(option);
     });
 
-    updateCheckpoints();
-  </script>
+    clearResult();
+  }
+
+  function clearResult() {
+    resultBox.className = "";
+    resultBox.style.display = "none";
+    resultBox.textContent = "";
+  }
+
+  function showResult(type, heading, message, person, checkpoint) {
+    resultBox.className = type;
+    resultBox.style.display = "block";
+    resultBox.replaceChildren();
+
+    const title = document.createElement("strong");
+    title.textContent = heading;
+    resultBox.appendChild(title);
+
+    const messageLine = document.createElement("div");
+    messageLine.textContent = message || "";
+    resultBox.appendChild(messageLine);
+
+    if (person) {
+      const details = [
+        ["Name", person.name || person.fullName],
+        ["ID Number", person.id],
+        ["Program", person.program],
+        ["Section", person.section],
+        ["Team", person.team],
+        ["Checkpoint", checkpoint]
+      ];
+
+      details.forEach(function(item) {
+        if (item[1] !== undefined && item[1] !== null && item[1] !== "") {
+          const line = document.createElement("div");
+          const label = document.createElement("strong");
+          label.textContent = item[0] + ": ";
+          line.appendChild(label);
+          line.appendChild(document.createTextNode(String(item[1])));
+          resultBox.appendChild(line);
+        }
+      });
+    }
+  }
+
+  function submitManualId() {
+    const id = document.getElementById("manualId").value.trim();
+
+    if (!id) {
+      showResult("warning", "ID Required", "Please enter an ID number.");
+      return;
+    }
+
+    sendScan(id);
+  }
+
+  function onScanSuccess(decodedText) {
+    if (isBusy) return;
+
+    const id = String(decodedText || "").trim();
+    if (!id) return;
+
+    // Avoid repeatedly submitting the same QR code while it is in view.
+    const now = Date.now();
+    if (id === lastScannedId && now - lastScannedAt < 3000) return;
+
+    lastScannedId = id;
+    lastScannedAt = now;
+
+    document.getElementById("manualId").value = id;
+    sendScan(id);
+  }
+
+  function sendScan(rawId) {
+    if (isBusy) return;
+
+    const id = String(rawId || "").trim();
+    const group = document.getElementById("group").value;
+    const checkpoint = document.getElementById("checkpoint").value;
+
+    if (!id) {
+      showResult("warning", "ID Required", "Please provide an ID number.");
+      return;
+    }
+
+    if (!checkpoint) {
+      showResult("warning", "Checkpoint Required", "Please select a checkpoint.");
+      return;
+    }
+
+    isBusy = true;
+    manualButton.disabled = true;
+    statusBox.textContent = "Recording attendance...";
+    clearResult();
+
+    const callbackName = "__sahsAttendanceCallback_" + (++callbackCounter);
+    const script = document.createElement("script");
+
+    let finished = false;
+    let timeoutId;
+
+    function cleanup() {
+      if (finished) return;
+      finished = true;
+
+      clearTimeout(timeoutId);
+      script.remove();
+
+      try {
+        delete window[callbackName];
+      } catch (e) {
+        window[callbackName] = undefined;
+      }
+
+      isBusy = false;
+      manualButton.disabled = false;
+    }
+
+    window[callbackName] = function(response) {
+      cleanup();
+
+      // Accept either an object or a JSON string from Apps Script.
+      let data = response;
+
+      if (typeof data === "string") {
+        try {
+          data = JSON.parse(data);
+        } catch (e) {
+          showResult(
+            "error",
+            "Invalid Response",
+            "The server returned a response that could not be read."
+          );
+          statusBox.textContent = "Please try again.";
+          return;
+        }
+      }
+
+      handleServerResponse(data, checkpoint);
+    };
+
+    script.onerror = function() {
+      cleanup();
+      showResult(
+        "error",
+        "Connection Error",
+        "Could not contact the attendance server. Check the Apps Script deployment and try again."
+      );
+      statusBox.textContent = "Connection failed.";
+    };
+
+    timeoutId = setTimeout(function() {
+      cleanup();
+      showResult(
+        "error",
+        "Request Timed Out",
+        "The server did not respond in time. Check your connection before retrying."
+      );
+      statusBox.textContent = "No response from server.";
+    }, 15000);
+
+    const params = new URLSearchParams({
+      action: "recordScan",
+      id: id,
+      checkpoint: checkpoint,
+      group: group,
+      callback: callbackName
+    });
+
+    script.src = SCRIPT_URL + "?" + params.toString();
+    document.body.appendChild(script);
+  }
+
+  function handleServerResponse(data, selectedCheckpoint) {
+    if (!data || typeof data !== "object") {
+      showResult(
+        "error",
+        "Unexpected Response",
+        "The attendance server returned an empty or invalid response."
+      );
+      statusBox.textContent = "Please check the Apps Script code.";
+      return;
+    }
+
+    const person = data.person || data.participant || null;
+    const message = data.message || "The server has responded.";
+    const checkpoint = data.checkpoint || selectedCheckpoint;
+
+    const messageText = String(message).toLowerCase();
+    const statusText = String(data.status || "").toLowerCase();
+
+    const notFound =
+      data.found === false ||
+      data.notFound === true ||
+      statusText === "not found" ||
+      messageText.includes("not found") ||
+      messageText.includes("unknown id");
+
+    const duplicate =
+      data.duplicate === true ||
+      statusText === "duplicate" ||
+      messageText.includes("duplicate");
+
+    if (notFound) {
+      showResult("error", "ID Not Found", message, person, checkpoint);
+      statusBox.textContent = "No matching record found.";
+      return;
+    }
+
+    if (duplicate) {
+      showResult("warning", "Duplicate Scan", message, person, checkpoint);
+      statusBox.textContent = "This checkpoint may already be recorded.";
+      return;
+    }
+
+    if (data.success === false || data.error) {
+      showResult("error", "Attendance Not Recorded", data.error || message, person, checkpoint);
+      statusBox.textContent = "Please resolve the error before continuing.";
+      return;
+    }
+
+    if (data.success === true || person) {
+      showResult("success", "Attendance Response", message, person, checkpoint);
+
+      if (data.foodStubEligible !== undefined) {
+        const foodLine = document.createElement("div");
+        const foodLabel = document.createElement("strong");
+        foodLabel.textContent = "Food Stub Eligible: ";
+        foodLine.appendChild(foodLabel);
+        foodLine.appendChild(
+          document.createTextNode(data.foodStubEligible ? "Yes" : "No")
+        );
+        resultBox.appendChild(foodLine);
+      }
+
+      statusBox.textContent = "Response received.";
+      return;
+    }
+
+    showResult(
+      "warning",
+      "Server Response",
+      message + " Please verify the attendance log in Google Sheets."
+    );
+    statusBox.textContent = "Response received; verify the result.";
+  }
+
+  function startScanner() {
+    if (typeof Html5QrcodeScanner === "undefined") {
+      statusBox.textContent = "Scanner library could not load. Check your internet connection.";
+      return;
+    }
+
+    scanner = new Html5QrcodeScanner(
+      "reader",
+      {
+        fps: 10,
+        qrbox: { width: 250, height: 250 },
+        rememberLastUsedCamera: true,
+        supportedScanTypes: [
+          Html5QrcodeScanType.SCAN_TYPE_CAMERA
+        ]
+      },
+      false
+    );
+
+    scanner.render(
+      onScanSuccess,
+      function() {
+        // Ignore routine scan-frame errors.
+      }
+    );
+
+    statusBox.textContent = "Allow camera access to begin scanning.";
+  }
+
+  updateCheckpoints();
+  startScanner();
+</script>
 </body>
 </html>
