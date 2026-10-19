@@ -1,232 +1,220 @@
+
+/**
+ * SAHS DAYS 2026 — QR ATTENDANCE BACKEND
+ * Google Sheets + GitHub Pages JSONP scanner
+ */
+
 const CONFIG = {
   SPREADSHEET_ID: "1-eka8sQdmjXqASk8mZBOA6VkgEzoxTY6dx_xkmF8M3g",
-  TIME_ZONE: "Asia/Manila",
-  FOOD_STUB_CUTOFF: "06:45",
 
-  SHEETS: {
-    PARTICIPANTS: "Participants",
-    PARTICIPANT_LOG: "Participant Attendance Log",
-    PARTICIPANT_SUMMARY: "Participant Summary",
-    COMMITTEE: "Committee",
-    COMMITTEE_LOG: "Committee Attendance Log",
-    FOOD_STUB: "Food Stub Monitoring",
-    DASHBOARD: "Dashboard"
-  },
+  PARTICIPANTS_SHEET: "Participants",
+  PARTICIPANT_LOG: "Participant Attendance Log",
 
-  PARTICIPANT_CHECKPOINTS: [
-    "Morning In",
-    "Morning Out",
-    "Afternoon In",
-    "Afternoon Out"
-  ],
+  COMMITTEE_SHEET: "Committee",
+  COMMITTEE_LOG: "Committee Attendance Log",
 
-  COMMITTEE_CHECKPOINTS: [
-    "Committee In",
-    "Committee Out"
-  ]
+  TIMEZONE: "Asia/Manila",
+  FOOD_STUB_CUTOFF: "06:45"
 };
 
-const HEADERS = {
-  "Participants": ["ID", "Full Name", "Program", "Section"],
-  "Participant Attendance Log": [
-    "Timestamp", "Date", "ID", "Full Name",
-    "Program", "Section", "Checkpoint", "Status"
-  ],
-  "Participant Summary": [
-    "ID", "Full Name", "Program", "Section",
-    "Morning In", "Morning Out", "Afternoon In", "Afternoon Out"
-  ],
-  "Committee": ["ID", "Full Name", "Program", "Section"],
-  "Committee Attendance Log": [
-    "Timestamp", "Date", "ID", "Full Name",
-    "Program", "Section", "Checkpoint",
-    "Food Stub Eligible", "Status"
-  ],
-  "Food Stub Monitoring": [
-    "Date", "ID", "Full Name", "Program",
-    "Section", "First Scan Time", "Eligible", "Stub Issued"
-  ],
-  "Dashboard": ["Metric", "Count"]
-};
+const PARTICIPANT_LOG_HEADERS = [
+  "Timestamp", "Event Date", "ID Number", "Full Name",
+  "Program", "Section", "Team", "Checkpoint",
+  "Station ID", "Status"
+];
+
+const COMMITTEE_LOG_HEADERS = [
+  "Timestamp", "Event Date", "ID Number", "Full Name",
+  "Program", "Section", "Committee", "Position",
+  "Checkpoint", "Food Stub Eligible", "Status"
+];
 
 /**
- * Run this function once from the Apps Script editor.
- * It creates missing tabs and adds headers to empty tabs.
+ * Handles requests from GitHub Pages.
+ * Supports:
+ *   ?action=ping&callback=callbackName
+ *   ?action=recordScan&id=123&checkpoint=Morning%20In
+ *       &group=Participant&callback=callbackName
  */
-function setupSheets() {
-  const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+function doGet(e) {
+  const params = (e && e.parameter) ? e.parameter : {};
+  const callback = params.callback || "";
 
-  Object.keys(HEADERS).forEach(function (name) {
-    let sheet = ss.getSheetByName(name);
+  let result;
 
-    if (!sheet) {
-      sheet = ss.insertSheet(name);
-    }
-
-    if (sheet.getLastRow() === 0) {
-      sheet.getRange(1, 1, 1, HEADERS[name].length)
-        .setValues([HEADERS[name]]);
-      sheet.setFrozenRows(1);
-    }
-  });
-
-  refreshSummary();
-  refreshDashboard();
-
-  return "Setup complete.";
-}
-
-/**
- * GitHub Pages sends scan requests to this web app.
- * The request body must be JSON with action: "recordScan".
- */
-function doPost(e) {
   try {
-    const body = e && e.postData && e.postData.contents
-      ? JSON.parse(e.postData.contents)
-      : {};
+    const action = params.action || "ping";
 
-    if (body.action !== "recordScan") {
-      return jsonResponse({
+    if (action === "ping") {
+      result = {
+        success: true,
+        message: "SAHS Days 2026 attendance server is online."
+      };
+    } else if (action === "recordScan") {
+      result = recordAttendance_(params);
+    } else {
+      result = {
         success: false,
-        message: "Unknown action."
-      });
+        message: "Unknown action: " + action
+      };
     }
-
-    const result = recordScan(body);
-
-    return jsonResponse(result);
   } catch (error) {
-    return jsonResponse({
+    result = {
       success: false,
-      message: error.message || String(error)
-    });
+      message: error && error.message
+        ? error.message
+        : "An unexpected server error occurred."
+    };
   }
-}
 
-/**
- * Optional browser test endpoint.
- */
-function doGet() {
-  return jsonResponse({
-    success: true,
-    message: "SAHS Days 2026 attendance backend is running."
-  });
-}
+  const json = JSON.stringify(result);
 
-function jsonResponse(data) {
+  // JSONP allows the GitHub Pages site to receive the response
+  // without a browser CORS preflight.
+  if (callback && /^[a-zA-Z_$][0-9a-zA-Z_$.[\]]*$/.test(callback)) {
+    return ContentService
+      .createTextOutput(callback + "(" + json + ");")
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+
   return ContentService
-    .createTextOutput(JSON.stringify(data))
+    .createTextOutput(json)
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-function recordScan(payload) {
+function recordAttendance_(params) {
+  const id = normalizeId_(params.id || params.idNumber || "");
+  const checkpoint = String(params.checkpoint || "").trim();
+  const group = normalizeGroup_(params.group || "Participant");
+
+  if (!id) {
+    return { success: false, message: "Please provide an ID number." };
+  }
+
+  if (!checkpoint) {
+    return { success: false, message: "Please select an attendance checkpoint." };
+  }
+
+  const isCommittee = group === "Committee";
+  const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+
+  const sourceSheet = ss.getSheetByName(
+    isCommittee ? CONFIG.COMMITTEE_SHEET : CONFIG.PARTICIPANTS_SHEET
+  );
+
+  const logSheet = ss.getSheetByName(
+    isCommittee ? CONFIG.COMMITTEE_LOG : CONFIG.PARTICIPANT_LOG
+  );
+
+  if (!sourceSheet) {
+    throw new Error(
+      "Sheet not found: " +
+      (isCommittee ? CONFIG.COMMITTEE_SHEET : CONFIG.PARTICIPANTS_SHEET)
+    );
+  }
+
+  if (!logSheet) {
+    throw new Error(
+      "Sheet not found: " +
+      (isCommittee ? CONFIG.COMMITTEE_LOG : CONFIG.PARTICIPANT_LOG)
+    );
+  }
+
+  const person = findPerson_(sourceSheet, id, isCommittee);
+
+  if (!person) {
+    return {
+      success: false,
+      message: "ID number " + id + " was not found in the " +
+        (isCommittee ? "Committee" : "Participants") + " sheet."
+    };
+  }
+
+  const validCheckpoints = isCommittee
+    ? ["Committee In", "Committee Out"]
+    : ["Morning In", "Morning Out", "Afternoon In", "Afternoon Out"];
+
+  if (!validCheckpoints.includes(checkpoint)) {
+    return {
+      success: false,
+      message: "Invalid checkpoint: " + checkpoint
+    };
+  }
+
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
 
   try {
-    const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-    const id = normalizeId(payload.id);
-    const checkpoint = String(payload.checkpoint || "").trim();
-
-    if (!id) {
-      return { success: false, message: "Missing ID." };
-    }
-
-    const isCommittee =
-      CONFIG.COMMITTEE_CHECKPOINTS.indexOf(checkpoint) !== -1;
-
-    const isParticipant =
-      CONFIG.PARTICIPANT_CHECKPOINTS.indexOf(checkpoint) !== -1;
-
-    if (!isCommittee && !isParticipant) {
-      return { success: false, message: "Invalid checkpoint." };
-    }
-
-    const sourceName = isCommittee
-      ? CONFIG.SHEETS.COMMITTEE
-      : CONFIG.SHEETS.PARTICIPANTS;
-
-    const logName = isCommittee
-      ? CONFIG.SHEETS.COMMITTEE_LOG
-      : CONFIG.SHEETS.PARTICIPANT_LOG;
-
-    const sourceSheet = ss.getSheetByName(sourceName);
-    const logSheet = ss.getSheetByName(logName);
-
-    if (!sourceSheet || !logSheet) {
-      return {
-        success: false,
-        message: "Required sheet not found. Run setupSheets()."
-      };
-    }
-
-    const person = findPerson(sourceSheet, id);
-
-    if (!person) {
-      return {
-        success: false,
-        message: "ID not found in " + sourceName + "."
-      };
-    }
-
     const now = new Date();
-    const date = Utilities.formatDate(
-      now, CONFIG.TIME_ZONE, "yyyy-MM-dd"
+    const timestamp = Utilities.formatDate(
+      now, CONFIG.TIMEZONE, "yyyy-MM-dd HH:mm:ss"
     );
-    const time = Utilities.formatDate(
-      now, CONFIG.TIME_ZONE, "HH:mm:ss"
+    const eventDate = Utilities.formatDate(
+      now, CONFIG.TIMEZONE, "yyyy-MM-dd"
     );
 
-    // Prevent the same ID from being recorded twice
-    // at the same checkpoint on the same date.
-    if (isDuplicate(logSheet, date, id, checkpoint)) {
-      return {
-        success: false,
-        duplicate: true,
-        message: "Already scanned for " + checkpoint + "."
-      };
+    // Check the log for an existing scan for this ID, date and checkpoint.
+    const lastRow = logSheet.getLastRow();
+
+    if (lastRow >= 2) {
+      const existingRows = logSheet
+        .getRange(2, 1, lastRow - 1, isCommittee ? 11 : 10)
+        .getDisplayValues();
+
+      const duplicate = existingRows.some(row =>
+        normalizeId_(row[2]) === id &&
+        String(row[1]).trim() === eventDate &&
+        String(row[8]).trim() === checkpoint
+      );
+
+      if (duplicate) {
+        return {
+          success: false,
+          duplicate: true,
+          message: person.name + " has already been recorded for " +
+            checkpoint + " today.",
+          person: person
+        };
+      }
     }
 
-    let eligible = "";
-
-    if (isCommittee && checkpoint === "Committee In") {
-      eligible = time <= CONFIG.FOOD_STUB_CUTOFF + ":00"
-        ? "Yes"
-        : "No";
-    }
+    let row;
 
     if (isCommittee) {
-      logSheet.appendRow([
-        now, date, person.id, person.name,
-        person.program, person.section,
-        checkpoint, eligible, "Recorded"
-      ]);
+      const currentTime = Utilities.formatDate(now, CONFIG.TIMEZONE, "HH:mm");
+      const eligible = checkpoint === "Committee In"
+        ? currentTime <= CONFIG.FOOD_STUB_CUTOFF
+        : "";
 
-      if (checkpoint === "Committee In") {
-        updateFoodStub(ss, date, person, time, eligible);
-      }
+      row = [
+        timestamp, eventDate, person.id, person.name,
+        person.program, person.section, person.committee,
+        person.position, checkpoint, eligible, "Recorded"
+      ];
     } else {
-      logSheet.appendRow([
-        now, date, person.id, person.name,
-        person.program, person.section,
-        checkpoint, "Recorded"
-      ]);
+      row = [
+        timestamp, eventDate, person.id, person.name,
+        person.program, person.section, person.team,
+        checkpoint, params.stationId || "", "Recorded"
+      ];
     }
 
-    refreshSummary();
-    refreshDashboard();
+    // Write the row in one operation.
+    logSheet.appendRow(row);
 
     return {
       success: true,
       duplicate: false,
-      message: "Scan recorded.",
-      id: person.id,
-      name: person.name,
+      message: "Attendance recorded successfully.",
+      timestamp: timestamp,
+      eventDate: eventDate,
       checkpoint: checkpoint,
-      date: date,
-      time: time,
-      foodStubEligible: eligible
+      group: isCommittee ? "Committee" : "Participant",
+      foodStubEligible: isCommittee && checkpoint === "Committee In"
+        ? (Utilities.formatDate(now, CONFIG.TIMEZONE, "HH:mm") <=
+           CONFIG.FOOD_STUB_CUTOFF)
+        : null,
+      person: person
     };
 
   } finally {
@@ -234,163 +222,108 @@ function recordScan(payload) {
   }
 }
 
-function normalizeId(value) {
-  return String(value == null ? "" : value).trim();
-}
-
 /**
- * Finds a person by ID using the first column.
- * IDs are compared as text to preserve leading zeros.
+ * Finds an ID in the source sheet.
+ * Expected Participants columns:
+ * A ID Number | B Full Name | C Program | D Section | E Team
+ *
+ * Expected Committee columns:
+ * A ID Number | B Full Name | C Program | D Section
+ * E Committee | F Position
  */
-function findPerson(sheet, id) {
+function findPerson_(sheet, id, isCommittee) {
   const values = sheet.getDataRange().getDisplayValues();
 
   if (values.length < 2) return null;
 
+  const headers = values[0].map(h => String(h).trim().toLowerCase());
+
+  const idCol = findHeader_(headers, ["id number", "id", "student id"]);
+  const nameCol = findHeader_(headers, ["full name", "name"]);
+  const programCol = findHeader_(headers, ["program"]);
+  const sectionCol = findHeader_(headers, ["section"]);
+  const teamCol = findHeader_(headers, ["team"]);
+  const committeeCol = findHeader_(headers, ["committee"]);
+  const positionCol = findHeader_(headers, ["position"]);
+
+  if (idCol === -1 || nameCol === -1) {
+    throw new Error(
+      "The " + sheet.getName() +
+      " sheet must have ID Number and Full Name headers in row 1."
+    );
+  }
+
   for (let r = 1; r < values.length; r++) {
-    if (normalizeId(values[r][0]) === id) {
-      return {
-        id: normalizeId(values[r][0]),
-        name: values[r][1] || "",
-        program: values[r][2] || "",
-        section: values[r][3] || ""
+    const row = values[r];
+
+    if (normalizeId_(row[idCol]) === id) {
+      const person = {
+        id: normalizeId_(row[idCol]),
+        name: row[nameCol] || "",
+        program: programCol >= 0 ? row[programCol] : "",
+        section: sectionCol >= 0 ? row[sectionCol] : ""
       };
+
+      if (isCommittee) {
+        person.committee = committeeCol >= 0 ? row[committeeCol] : "";
+        person.position = positionCol >= 0 ? row[positionCol] : "";
+      } else {
+        person.team = teamCol >= 0 ? row[teamCol] : "";
+      }
+
+      return person;
     }
   }
 
   return null;
 }
 
-function isDuplicate(logSheet, date, id, checkpoint) {
-  const values = logSheet.getDataRange().getDisplayValues();
-
-  // Log columns: Date = B, ID = C, Checkpoint = G.
-  for (let r = 1; r < values.length; r++) {
-    if (
-      values[r][1] === date &&
-      normalizeId(values[r][2]) === id &&
-      values[r][6] === checkpoint
-    ) {
-      return true;
-    }
+function findHeader_(headers, candidates) {
+  for (let i = 0; i < candidates.length; i++) {
+    const index = headers.indexOf(candidates[i]);
+    if (index !== -1) return index;
   }
-
-  return false;
+  return -1;
 }
 
-function updateFoodStub(ss, date, person, time, eligible) {
-  const sheet = ss.getSheetByName(CONFIG.SHEETS.FOOD_STUB);
-  const values = sheet.getDataRange().getDisplayValues();
+function normalizeId_(value) {
+  return String(value == null ? "" : value).trim();
+}
 
-  // One food-stub monitoring row per committee ID per date.
-  for (let r = 1; r < values.length; r++) {
-    if (
-      values[r][0] === date &&
-      normalizeId(values[r][1]) === person.id
-    ) {
-      return;
-    }
+function normalizeGroup_(value) {
+  const group = String(value || "").trim().toLowerCase();
+
+  if (
+    group === "committee" ||
+    group === "working committee" ||
+    group === "workingcommittee"
+  ) {
+    return "Committee";
   }
 
-  sheet.appendRow([
-    date,
-    person.id,
-    person.name,
-    person.program,
-    person.section,
-    time,
-    eligible,
-    "No"
-  ]);
+  return "Participant";
 }
 
 /**
- * Rebuilds the participant summary using the attendance log.
- * A checkpoint is marked with its first recorded scan time.
+ * Optional: run this from the Apps Script editor to check
+ * that the spreadsheet and required sheets are accessible.
  */
-function refreshSummary() {
+function testConnection() {
   const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-  const participants = ss.getSheetByName(CONFIG.SHEETS.PARTICIPANTS);
-  const log = ss.getSheetByName(CONFIG.SHEETS.PARTICIPANT_LOG);
-  const summary = ss.getSheetByName(CONFIG.SHEETS.PARTICIPANT_SUMMARY);
 
-  if (!participants || !log || !summary) return;
-
-  const people = participants.getDataRange().getDisplayValues();
-  const logs = log.getDataRange().getValues();
-
-  const checkpoints = CONFIG.PARTICIPANT_CHECKPOINTS;
-  const byId = {};
-
-  for (let r = 1; r < logs.length; r++) {
-    const row = logs[r];
-    const id = normalizeId(row[2]);
-    const checkpoint = String(row[6] || "");
-    const timestamp = row[0];
-
-    if (!id || checkpoints.indexOf(checkpoint) === -1) continue;
-
-    const key = id + "|" + checkpoint;
-
-    if (!byId[key] && timestamp) {
-      byId[key] = Utilities.formatDate(
-        new Date(timestamp), CONFIG.TIME_ZONE, "HH:mm:ss"
-      );
-    }
-  }
-
-  const output = [[
-    "ID", "Full Name", "Program", "Section",
-    "Morning In", "Morning Out", "Afternoon In", "Afternoon Out"
-  ]];
-
-  for (let r = 1; r < people.length; r++) {
-    const p = people[r];
-    const id = normalizeId(p[0]);
-
-    if (!id) continue;
-
-    output.push([
-      id, p[1] || "", p[2] || "", p[3] || "",
-      byId[id + "|Morning In"] || "",
-      byId[id + "|Morning Out"] || "",
-      byId[id + "|Afternoon In"] || "",
-      byId[id + "|Afternoon Out"] || ""
-    ]);
-  }
-
-  summary.clearContents();
-  summary.getRange(1, 1, output.length, output[0].length)
-    .setValues(output);
-  summary.setFrozenRows(1);
-}
-
-function refreshDashboard() {
-  const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-  const participants = ss.getSheetByName(CONFIG.SHEETS.PARTICIPANTS);
-  const committee = ss.getSheetByName(CONFIG.SHEETS.COMMITTEE);
-  const participantLog = ss.getSheetByName(CONFIG.SHEETS.PARTICIPANT_LOG);
-  const committeeLog = ss.getSheetByName(CONFIG.SHEETS.COMMITTEE_LOG);
-  const dashboard = ss.getSheetByName(CONFIG.SHEETS.DASHBOARD);
-
-  if (!dashboard) return;
-
-  const countPeople = function (sheet) {
-    return sheet ? Math.max(0, sheet.getLastRow() - 1) : 0;
-  };
-
-  const rows = [
-    ["Metric", "Count"],
-    ["Total Participants", countPeople(participants)],
-    ["Total Working Committee", countPeople(committee)],
-    ["Participant Scan Records", countPeople(participantLog)],
-    ["Committee Scan Records", countPeople(committeeLog)],
-    ["Last Updated", Utilities.formatDate(
-      new Date(), CONFIG.TIME_ZONE, "yyyy-MM-dd HH:mm:ss"
-    )]
+  const requiredSheets = [
+    CONFIG.PARTICIPANTS_SHEET,
+    CONFIG.PARTICIPANT_LOG,
+    CONFIG.COMMITTEE_SHEET,
+    CONFIG.COMMITTEE_LOG
   ];
 
-  dashboard.clearContents();
-  dashboard.getRange(1, 1, rows.length, 2).setValues(rows);
-  dashboard.setFrozenRows(1);
+  requiredSheets.forEach(name => {
+    if (!ss.getSheetByName(name)) {
+      throw new Error("Missing sheet: " + name);
+    }
+  });
+
+  Logger.log("Connection successful: " + ss.getName());
+  return "Connection successful: " + ss.getName();
 }
